@@ -67,7 +67,10 @@ async def test_rate_limit_returns_429_after_exceeded(client: AsyncClient):
         # Send 11 requests (limit is 10/hour)
         for i in range(11):
             response = await client.post("/api/analyze", data={"text": f"test {i}"})
+            if i == 9:
+                response_10 = response
         last = response
 
+    assert response_10.status_code == 201
     assert last.status_code == 429
     assert last.json()["error"] == "rate_limited"

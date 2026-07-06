@@ -14,11 +14,13 @@ async def rate_limit_dependency(request: Request):
 
     # Remove old entries
     _window_requests[ip] = [t for t in _window_requests[ip] if t > window_start]
+    if not _window_requests[ip]:
+        del _window_requests[ip]
 
     if len(_window_requests[ip]) >= settings.rate_limit_per_hour:
         raise HTTPException(
             429,
-            detail={"error": "rate_limited", "retry_after": 3600},
+            detail={"error": "rate_limited", "detail": "请求过于频繁，请稍后再试", "retry_after": 3600},
         )
 
     _window_requests[ip].append(now)
