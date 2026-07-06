@@ -13,5 +13,6 @@ async def get_db():
         yield session
 
 async def init_db():
+    import models.report  # noqa: F401 — ensure model is registered with Base.metadata
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

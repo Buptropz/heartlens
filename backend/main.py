@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from config import settings
 from routers.analyze import router as analyze_router
 from routers.report import router as report_router
+from database import init_db
 from services.cleaner import cleanup_expired_reports
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await init_db()
     task = asyncio.create_task(cleanup_loop())
     yield
     task.cancel()
