@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from config import settings
 from routers.analyze import router as analyze_router
+from routers.report import router as report_router
 
 app = FastAPI(title="HeartLens API", version="0.1.0")
 
@@ -14,6 +15,7 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 app.include_router(analyze_router)
+app.include_router(report_router)
 
 app.add_middleware(
     CORSMiddleware,
