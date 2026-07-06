@@ -8,6 +8,7 @@ from models.report import Report
 from validation import validate_analyze_request, hash_content
 from services.analyzer import analyze_chat
 from config import settings
+from middleware import rate_limit_dependency
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ async def analyze(
     file: UploadFile | None = File(None),
     locale: str = Form("zh-CN"),
     db: AsyncSession = Depends(get_db),
+    _rate_check=Depends(rate_limit_dependency),
 ):
     input_type, content_bytes, locale = await validate_analyze_request(images, text, file, locale)
 
