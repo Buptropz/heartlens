@@ -1,4 +1,4 @@
-import nanoid
+import logging
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,8 @@ from models.report import Report
 from validation import validate_analyze_request, hash_content
 from services.analyzer import analyze_chat
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
@@ -38,6 +40,7 @@ async def analyze(
     try:
         analysis = await analyze_chat(input_type, content_bytes, locale)
     except Exception as e:
+        logger.exception("DeepSeek API call failed")
         raise HTTPException(502, detail={"error": "ai_service_error", "detail": "分析服务暂时不可用"})
 
     # Store

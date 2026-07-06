@@ -15,13 +15,6 @@ async def setup_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 
-@pytest_asyncio.fixture
-async def client():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
-
-
 MOCK_ANALYSIS = {
     "radar": {
         "sincerity": {"score": 70, "label": "真诚度"},
