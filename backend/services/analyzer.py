@@ -56,31 +56,37 @@ async def analyze_chat(input_type: str, content_bytes: bytes, locale: str) -> di
 
     if input_type == "image":
         image_parts = content_bytes.split(b"||IMG_SEP||")
-        image_contents = []
+        import base64
+
+        # Step 1: OCR each image with deepseek-ocr model
+        ocr_texts = []
         for part in image_parts:
-            import base64
             b64 = base64.b64encode(part).decode("utf-8")
-            image_contents.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{b64}"}
-            })
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": [
-                *image_contents,
-                {"type": "text", "text": "请分析以上聊天截图中的对话内容，按 JSON 格式输出分析报告。"}
-            ]}
-        ]
+            ocr_response = await client.chat.completions.create(
+                model="deepseek-ocr",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                        {"type": "text", "text": "请识别提取这张聊天截图中所有的对话文字内容，按发送者逐条输出。"},
+                    ]
+                }],
+                max_tokens=4096,
+                timeout=30.0,
+            )
+            ocr_texts.append(ocr_response.choices[0].message.content)
+
+        text = "\n\n".join(ocr_texts)
     else:
         text = content_bytes.decode("utf-8")
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": text}
-        ]
 
+    # Step 2: Analyze with deepseek-chat
     response = await client.chat.completions.create(
         model="deepseek-chat",
-        messages=messages,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": text},
+        ],
         response_format={"type": "json_object"},
         temperature=0.7,
         max_tokens=4096,
