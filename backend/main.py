@@ -1,9 +1,12 @@
+import asyncio
+
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from config import settings
 from routers.analyze import router as analyze_router
 from routers.report import router as report_router
+from services.cleaner import cleanup_expired_reports
 
 app = FastAPI(title="HeartLens API", version="0.1.0")
 
@@ -24,6 +27,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+async def cleanup_loop():
+    while True:
+        await asyncio.sleep(86400)  # 24 hours
+        try:
+            await cleanup_expired_reports()
+        except Exception:
+            pass
+
+
+@app.on_event("startup")
+async def start_cleanup():
+    asyncio.create_task(cleanup_loop())
+
 
 @app.get("/api/health")
 async def health():
