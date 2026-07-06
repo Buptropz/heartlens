@@ -49,38 +49,18 @@ SYSTEM_PROMPT = """你是一位资深的心理咨询师和关系分析专家，�
 
 
 async def analyze_chat(input_type: str, content_bytes: bytes, locale: str) -> dict:
+    if input_type == "image":
+        return await _analyze_image(content_bytes, locale)
+    else:
+        return await _analyze_text(content_bytes)
+
+
+async def _analyze_text(content_bytes: bytes) -> dict:
     client = AsyncOpenAI(
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,
     )
-
-    if input_type == "image":
-        image_parts = content_bytes.split(b"||IMG_SEP||")
-        import base64
-
-        # Step 1: OCR each image with deepseek-ocr model
-        ocr_texts = []
-        for part in image_parts:
-            b64 = base64.b64encode(part).decode("utf-8")
-            ocr_response = await client.chat.completions.create(
-                model="deepseek-ocr",
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                        {"type": "text", "text": "请识别提取这张聊天截图中所有的对话文字内容，按发送者逐条输出。"},
-                    ]
-                }],
-                max_tokens=4096,
-                timeout=30.0,
-            )
-            ocr_texts.append(ocr_response.choices[0].message.content)
-
-        text = "\n\n".join(ocr_texts)
-    else:
-        text = content_bytes.decode("utf-8")
-
-    # Step 2: Analyze with deepseek-chat
+    text = content_bytes.decode("utf-8")
     response = await client.chat.completions.create(
         model="deepseek-chat",
         messages=[
@@ -92,17 +72,54 @@ async def analyze_chat(input_type: str, content_bytes: bytes, locale: str) -> di
         max_tokens=4096,
         timeout=55.0,
     )
+    return _parse_response(response.choices[0].message.content)
 
-    content = response.choices[0].message.content
+
+async def _analyze_image(content_bytes: bytes, locale: str) -> dict:
+    client = AsyncOpenAI(
+        api_key=settings.gemini_api_key,
+        base_url=settings.gemini_base_url,
+    )
+    image_parts = content_bytes.split(b"||IMG_SEP||")
+    import base64
+
+    image_blocks = []
+    for part in image_parts:
+        b64 = base64.b64encode(part).decode("utf-8")
+        image_blocks.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{b64}"},
+        })
+
+    response = await client.chat.completions.create(
+        model=settings.gemini_model,
+        messages=[{
+            "role": "user",
+            "content": [
+                *image_blocks,
+                {"type": "text", "text": SYSTEM_PROMPT + "\n\n请分析以上聊天截图中的对话内容，按 JSON 格式输出分析报告。"},
+            ],
+        }],
+        temperature=0.7,
+        max_tokens=4096,
+        timeout=55.0,
+    )
+
+    raw = response.choices[0].message.content
+    # Gemini may wrap JSON in markdown code blocks
+    if "```" in raw:
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return _parse_response(raw.strip())
+
+
+def _parse_response(content: str) -> dict:
     result = json.loads(content)
-
-    # Validate required fields
     required_dims = ["sincerity", "engagement", "respect", "manipulation", "communication", "red_flags"]
     for dim in required_dims:
         if dim not in result.get("radar", {}):
             result.setdefault("radar", {})[dim] = {"score": 0, "label": dim}
-
     result.setdefault("cards", [])
     result.setdefault("overall", "")
-
     return result
