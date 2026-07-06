@@ -1,4 +1,6 @@
 import asyncio
+import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +10,21 @@ from routers.analyze import router as analyze_router
 from routers.report import router as report_router
 from services.cleaner import cleanup_expired_reports
 
-app = FastAPI(title="HeartLens API", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(cleanup_loop())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(title="HeartLens API", version="0.1.0", lifespan=lifespan)
 
 
 @app.exception_handler(HTTPException)
@@ -28,18 +44,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 async def cleanup_loop():
+    try:
+        await cleanup_expired_reports()
+    except Exception:
+        logger.exception("Cleanup job failed")
     while True:
         await asyncio.sleep(86400)  # 24 hours
         try:
             await cleanup_expired_reports()
         except Exception:
-            pass
-
-
-@app.on_event("startup")
-async def start_cleanup():
-    asyncio.create_task(cleanup_loop())
+            logger.exception("Cleanup job failed")
 
 
 @app.get("/api/health")
