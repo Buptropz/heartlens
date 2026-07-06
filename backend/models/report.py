@@ -2,7 +2,7 @@ import nanoid
 from sqlalchemy import String, SmallInteger, Text, DateTime, func
 from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from database import Base
 
 def _new_id():
@@ -33,5 +33,5 @@ class Report(Base):
     )
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now() + timedelta(days=30),
+        default=lambda: datetime.now(timezone.utc) + timedelta(days=30),
     )
